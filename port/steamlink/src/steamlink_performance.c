@@ -1,0 +1,318 @@
+/*
+STEAMLINK_PERFORMANCE.C
+
+Performance mode (HALO_CONSOLE_PERFORMANCE_MODE, display.performance_mode):
+the passes the Steam Link's frame can least afford left out while it is on.
+Its GPU's driver costs about half a millisecond a draw whatever the draw,
+so what pays is a pass's draws: on a10's bridge, frozen on one picture
+(HALO_PERF_AB, gles2_layer.c), the level's decals, dynamic lights,
+reflections and specular highlights together took a frame from 261 to 147
+ms, and the lens flares another 33. The level's fog, shadows, detail
+objects and the models' level of detail cost nothing there and are kept.
+
+It also draws fewer pixels and sees less far, as the old consoles' ports of
+big games did: the picture drawn with display.performance_lines' lines (240,
+a quarter of the pixels; d3d8_gl.c's screen_mode_choose asks
+console_performance_lines), scaled up at the present, and the view fogged
+to opaque at display.performance_view_distance and clipped there (render.c
+asks console_performance_view_distance), so that the level's far clusters
+and objects are not drawn at all (not in a cutscene, framed for what is far
+away). Models count as half their size on the screen when their detail is
+chosen (display.performance_model_detail; models.c asks
+console_performance_model_detail, as often as it draws one).
+
+Past that, what a frame at Bloodgulch's spawn gives up: the sky, which the
+fog's color fills in (render_sky.c), the transparent parts of the level's
+objects (render_objects.c), scenery nothing can touch, as plants (the same)
+and the HUD's frames and backgrounds (hud_draw.c), each a setting of its own
+and all kept in a cutscene and at the main menu. The driver's own share is launch.sh's: the shader
+compiler's load-time constants, worked out again at every draw, are off.
+
+Holding Back and pressing down on the d-pad (or F9) switches it, with a
+line on the screen (steamlink_combos.c reads them, with the other combos: the game's
+headers and the system's do not meet in one file). The game's own flags
+(rasterizer_debug_options, the script's rasterizer_environment_decals and
+the rest) are set each frame while it is on, and put back as they were when
+it goes off.
+*/
+
+#include "cseries.h"
+#include "cutscene/cinematics.h"
+#include "game/game.h"
+#include "game/players.h"
+#include "interface/hud_messaging.h"
+#include "interface/terminal.h"
+#include "rasterizer/rasterizer_console_vars.h"
+#include "scenario/scenario.h"
+#include "scenario/scenario_definitions.h"
+#include "structures/structure_bsp_definitions.h"
+
+/* (port_config.c's, as the game's own sources declare it) */
+int config_boolean(const char *name);
+long config_integer(const char *name);
+double config_real(const char *name);
+unsigned long config_changes(void);
+void steamlink_performance_update(int switched);
+void steamlink_hud_message(const char *text);
+long console_performance_lines(void);
+real console_performance_view_distance(void);
+real console_performance_model_detail(void);
+boolean console_performance_object_transparents(void);
+boolean console_performance_sky(void);
+real console_performance_decoration_distance(void);
+boolean console_performance_hud_frames(void);
+
+static struct
+{
+	boolean *flag;
+	boolean kept;
+} performance_flags[] =
+{
+	{ &rasterizer_debug_options.draw_environment_decals },
+	{ &rasterizer_debug_options.draw_environment_diffuse_lights },
+	{ &rasterizer_debug_options.draw_environment_reflections },
+	{ &rasterizer_debug_options.draw_environment_specular_lights },
+	{ &rasterizer_debug_options.draw_lens_flares },
+};
+
+#define PERFORMANCE_FLAG_COUNT ((int)(sizeof(performance_flags) / sizeof(performance_flags[0])))
+
+static int performance_on = -1;
+
+static void performance_keep(void)
+{
+	int index;
+
+	for (index = 0; index < PERFORMANCE_FLAG_COUNT; index++)
+		performance_flags[index].kept = *performance_flags[index].flag;
+}
+
+static void performance_restore(void)
+{
+	int index;
+
+	for (index = 0; index < PERFORMANCE_FLAG_COUNT; index++)
+		*performance_flags[index].flag = performance_flags[index].kept;
+}
+
+static void performance_start(void)
+{
+	if (performance_on >= 0)
+		return;
+	performance_on = config_boolean("display.performance_mode") != 0;
+	performance_keep();
+}
+
+/* whether what is left out for the frame rate is left out now: not in a
+cutscene, framed for what is far away and close, nor at the main menu, whose
+picture is its sky */
+static boolean performance_cutting(void)
+{
+	performance_start();
+	return performance_on && !cinematic_in_progress() &&
+		global_scenario_get()->type != _scenario_type_main_menu;
+}
+
+/* the lines the picture is drawn with, 0 for the game's own (asked between
+frames: a switch shows from the next one) */
+long console_performance_lines(void)
+{
+	performance_start();
+	return performance_on ? config_integer("display.performance_lines") : 0;
+}
+
+void platform_log(char const *format, ...);
+
+/* whether the level is small beside the distance (its bounds' diagonal is
+under one and a half times it): then the distance cuts next to nothing
+(the draws of carousel, damnation and chillout are the same from 30 to 90),
+and its fog hides nothing: without it a level with no fog of its own that
+shows (carousel, ratrace, putput) is drawn without the fog pass, 6 to 24
+draws a frame (patches/chupathingyce/0003) */
+static boolean performance_level_fits(real distance)
+{
+	static struct structure_bsp *known;
+	static real diagonal_squared;
+	struct structure_bsp *structure_bsp = global_structure_bsp_get();
+
+	if (!structure_bsp)
+		return FALSE;
+	if (structure_bsp != known)
+	{
+		real x = structure_bsp->world_bounds.x1 - structure_bsp->world_bounds.x0;
+		real y = structure_bsp->world_bounds.y1 - structure_bsp->world_bounds.y0;
+		real z = structure_bsp->world_bounds.z1 - structure_bsp->world_bounds.z0;
+
+		known = structure_bsp;
+		diagonal_squared = x * x + y * y + z * z;
+		platform_log("performance: the level is %.0f by %.0f by %.0f units", (double)x, (double)y, (double)z);
+	}
+	return diagonal_squared > 0.0f && diagonal_squared < distance * distance * 2.25f;
+}
+
+/* how far the camera sees, 0 for as far as the level does */
+real console_performance_view_distance(void)
+{
+	real distance;
+
+	if (!performance_cutting())
+		return 0.0f;
+	distance = (real)config_real("display.performance_view_distance");
+	return distance > 0.0f && performance_level_fits(distance) ? 0.0f : distance;
+}
+
+/* whether the level's lightmap pass and its texture pass are drawn as one
+(render.c, d3d8_gl.c's fused draws): half of the level's draws. Only where
+nothing is drawn between the two that the textures should cover: the
+decals and the diffuse lights, which performance mode leaves out.
+HALO_GLES2_NO_FUSE draws them one after the other, as before. */
+boolean console_performance_fused_level_passes(void)
+{
+	static int allowed = -1;
+
+	if (allowed < 0)
+		allowed = !getenv("HALO_GLES2_NO_FUSE");
+	return allowed && performance_cutting() && !rasterizer_debug_options.draw_environment_decals &&
+		!rasterizer_debug_options.draw_environment_diffuse_lights &&
+		rasterizer_debug_options.draw_environment_lightmaps && rasterizer_debug_options.draw_environment_textures &&
+		rasterizer_debug_options.drawing_mode == 0;
+}
+
+/* what a model's size on the screen is multiplied by when its detail is
+chosen, 1 for the game's own */
+real console_performance_model_detail(void)
+{
+	static unsigned long read_at = (unsigned long)-1;
+	static real detail = 1.0f;
+
+	performance_start();
+	if (!performance_on)
+		return 1.0f;
+	if (read_at != config_changes())
+	{
+		read_at = config_changes();
+		detail = (real)config_real("display.performance_model_detail");
+	}
+	return detail;
+}
+
+/* a setting read once a change of the settings */
+static boolean performance_setting(const char *name, unsigned long *read_at, boolean *value)
+{
+	if (*read_at != config_changes())
+	{
+		*read_at = config_changes();
+		*value = config_boolean(name) != 0;
+	}
+	return *value;
+}
+
+/* whether the level's objects draw their transparent parts (a cutscene
+keeps them, framed for what is close) */
+boolean console_performance_object_transparents(void)
+{
+	static unsigned long read_at = (unsigned long)-1;
+	static boolean value = TRUE;
+
+	return !performance_cutting() ||
+		performance_setting("display.performance_object_transparents", &read_at, &value);
+}
+
+boolean console_performance_sky(void)
+{
+	static unsigned long read_at = (unsigned long)-1;
+	static boolean value = TRUE;
+
+	return !performance_cutting() || performance_setting("display.performance_sky", &read_at, &value);
+}
+
+boolean console_performance_hud_frames(void)
+{
+	static unsigned long read_at = (unsigned long)-1;
+	static boolean value = TRUE;
+
+	return !performance_cutting() || performance_setting("display.performance_hud_frames", &read_at, &value);
+}
+
+/* how far scenery nothing can touch is drawn, 0 as far as everything else */
+real console_performance_decoration_distance(void)
+{
+	static unsigned long read_at = (unsigned long)-1;
+	static real distance = 0.0f;
+
+	if (!performance_cutting())
+		return 0.0f;
+	if (read_at != config_changes())
+	{
+		read_at = config_changes();
+		distance = (real)config_real("display.performance_decoration_distance");
+	}
+	return distance;
+}
+
+/* a line where the player sees it: the HUD's messages, as a checkpoint's,
+for each player on this box, in a level (the main menu has no HUD). The
+console's lines (terminal_printf) show only while it is open for typing
+(terminal_render 2), which a pad never opens. A message holds 62
+characters, so a longer line is several, broken between words */
+void steamlink_hud_message(const char *text)
+{
+	enum { HUD_MESSAGE_CHARACTERS = 62, HUD_MESSAGE_PARTS = 4 };
+	wchar_t parts[HUD_MESSAGE_PARTS][HUD_MESSAGE_CHARACTERS + 1];
+	short player, players;
+	int count = 0;
+
+	terminal_printf(NULL, "%s", text);
+	if (!game_in_progress() || global_scenario_get()->type == _scenario_type_main_menu)
+		return;
+	while (*text && count < HUD_MESSAGE_PARTS)
+	{
+		int length = (int)strlen(text), index;
+
+		if (length > HUD_MESSAGE_CHARACTERS)
+		{
+			for (length = HUD_MESSAGE_CHARACTERS; length > 0 && text[length] != ' '; length--)
+			{
+			}
+			if (!length)
+				length = HUD_MESSAGE_CHARACTERS;
+		}
+		for (index = 0; index < length; index++)
+			parts[count][index] = (wchar_t)(unsigned char)text[index];
+		parts[count++][length] = 0;
+		text += length;
+		while (*text == ' ')
+			text++;
+	}
+	/* (the newest message is the top one: the last part first, so that the
+	line reads down the screen) */
+	players = local_player_count();
+	while (count--)
+	{
+		for (player = 0; player < players; player++)
+			hud_print_message(player, parts[count]);
+	}
+}
+
+/* each pass of the event pump, switched when its switch was pressed */
+void steamlink_performance_update(int switched)
+{
+	int index;
+
+	performance_start();
+	if (switched)
+	{
+		performance_on = !performance_on;
+		if (performance_on)
+			performance_keep();
+		else
+			performance_restore();
+		/* (newest on top: the state reads first) */
+		steamlink_hud_message("did haguero vibe code this shit?");
+		steamlink_hud_message(performance_on ? "performance mode on" : "performance mode off");
+	}
+	if (!performance_on)
+		return;
+	for (index = 0; index < PERFORMANCE_FLAG_COUNT; index++)
+		*performance_flags[index].flag = FALSE;
+}
