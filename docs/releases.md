@@ -41,7 +41,7 @@ Each build has the game's own 32-bit names:
 | `chupathingyce-windows-release.zip` | 32-bit Windows (x86) |
 | `chupathingyce-linux-release.zip` | 32-bit Linux (x86) |
 | `updates.json`, `updates.json.sig` | The list of update files the game reads, and its signature |
-| `*.zip.sig` | Each zip's own signature (releases only, for older builds) |
+| `*.zip.sig`, `SHA256SUMS.sig` | Each zip's own signature and the sums' (releases only) |
 | `SHA256SUMS` | The zips' SHA-256 |
 
 The names don't say "x86" or "32" on purpose. A 32-bit install's updater
@@ -54,18 +54,19 @@ repository's name say what they are. The Steam Link's will be
 
 ## Signing
 
-Releases are signed with the game's update key, in the same format, with
-the game's own `tools/update_sign.py`. The sign job runs only when the
-repository variable `SIGNING` is `true`, in the environment `signing`, with
-the secret `UPDATE_SIGNING_KEY`. Those are the same environment and secret
-names as the game's release workflow. Until signing is on, a release is
-published as a draft, and test builds and nightlies are published unsigned:
-they can be downloaded by hand, but no updater installs them.
+No key is ever in this repository. Builds are signed by ChupathingyCE's
+release workflows, with the game's update keys, in the same format as the
+game's releases. Until then a release here is a draft, and a test build or a
+nightly is an unsigned pre-release: it can be downloaded by hand, but no
+updater installs it.
 
-The game has no prerelease key yet, so test builds and nightlies are signed
-with the update key, as the game's are. When the prerelease key is made, the
-sign job for them moves to the environment `signing-prerelease` and the
-secret `UPDATE_PRERELEASE_KEY`.
+Signing checks the build first: the run named on the release notes'
+`Build:` line must be this repository's Release workflow, on main or the
+release's tag, at the commit the notes name, and the game's commit must be
+on the game's main or a release branch. It signs that run's own files (its
+`release-unsigned` artifact), adds `updates.json` and the signatures to the
+release, then publishes a release as latest, or copies a test build's list
+to the fixed `testing` pre-release, the testing channel's feed.
 
 ## How 32-bit installs get updates
 

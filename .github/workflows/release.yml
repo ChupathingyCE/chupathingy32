@@ -21,17 +21,15 @@ name: Release
 # Test builds and nightlies are never marked latest, so players on the
 # release channel never see them.
 #
-# Signing (the game's tools/update_sign.py, the same keys and the same
-# format as the game's releases): each zip's .sig (releases), and
-# updates.json with updates.json.sig, the list the self-updaters read. It
-# runs only when the repository variable SIGNING is true, in the environment
-# "signing" with the secret UPDATE_SIGNING_KEY, the update key set's primary
-# key (the same environment and secret name as the game's release workflow).
-# The game has no prerelease key yet, so test builds and nightlies are
-# signed with it too, as the game's are; once one is made, they move to the
-# environment "signing-prerelease" and UPDATE_PRERELEASE_KEY. Until SIGNING
-# is on, a release is published as a draft, and test builds and nightlies
-# unsigned: they can be downloaded, but no updater takes them.
+# Nothing is signed here: no key is ever in this repository. A release is
+# published as a draft, and a test build or a nightly as an unsigned
+# pre-release; both can be downloaded by hand, but no updater installs them
+# until ChupathingyCE's release workflows (the command repository's
+# Chupathingy32 workflow) have signed them: they check this run (the notes'
+# "Build:" line), take its release-unsigned artifact, sign the zips and
+# updates.json with the game's update keys, upload the signatures, and then
+# publish the release as latest, or copy a test build's list to the
+# "testing" pre-release, the testing channel's feed (docs/releases.md).
 on:
   push:
     tags:
@@ -179,80 +177,12 @@ jobs:
         with:
           name: release-unsigned
           path: release/
-          retention-days: 3
-          compression-level: 0
-          if-no-files-found: error
-
-  sign:
-    needs: [plan, package]
-    if: vars.SIGNING == 'true'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    environment: signing
-    env:
-      KIND: ${{ needs.plan.outputs.kind }}
-      VERSION: ${{ needs.plan.outputs.version }}
-      TAG: ${{ needs.plan.outputs.tag }}
-      GAME: ${{ needs.plan.outputs.game }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.ref }}
-          submodules: true
-
-      # (the game's tools/update_sign.py and keys at the commit that was built)
-      - name: The game's commit
-        env:
-          GAME_REF: ${{ needs.plan.outputs.game_ref }}
-        run: |
-          if [ -n "$GAME_REF" ]; then
-            git -C chupathingyce fetch --depth 1 origin "$GAME_REF"
-            git -C chupathingyce checkout --detach FETCH_HEAD
-          fi
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: release-unsigned
-          path: release
-
-      - name: Sign
-        env:
-          SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
-        run: |
-          set +x
-          case "$SIGNING_KEY" in
-            *"PRIVATE KEY"*) ;;
-            *) echo "::error::UPDATE_SIGNING_KEY is not set in the environment signing"; exit 1 ;;
-          esac
-          umask 077
-          key="$(mktemp "$RUNNER_TEMP/key.XXXXXX")"
-          trap 'rm -f "$key"' EXIT
-          printf '%s\n' "$SIGNING_KEY" > "$key"
-          zips=(release/chupathingyce-*.zip)
-          # (a release's zips have their own .sig, for builds from before the
-          # list; a test build's or a nightly's only the list)
-          if [ "$KIND" = release ]; then
-            python3 chupathingyce/tools/update_sign.py sign "$key" "$VERSION" "${zips[@]}"
-          fi
-          python3 chupathingyce/tools/update_sign.py manifest "$key" "$VERSION" --tag "$TAG" \
-            --channel "$KIND" --commit "$GAME" "${zips[@]}"
-          cat release/updates.json
-
-      - name: Check the signatures
-        if: needs.plan.outputs.kind == 'release'
-        run: python3 chupathingyce/tools/update_sign.py verify "$VERSION" release/chupathingyce-*.zip
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: release-signed
-          path: release/
-          retention-days: 3
+          retention-days: 14
           compression-level: 0
           if-no-files-found: error
 
   publish:
-    needs: [plan, package, sign]
-    if: ${{ !cancelled() && needs.package.result == 'success' && needs.sign.result != 'failure' }}
+    needs: [plan, package]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -265,12 +195,11 @@ jobs:
       TAG: ${{ needs.plan.outputs.tag }}
       COMMIT: ${{ needs.plan.outputs.commit }}
       GAME: ${{ needs.plan.outputs.game }}
-      SIGNED: ${{ needs.sign.result == 'success' }}
       NOTES: ${{ inputs.notes }}
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.sign.result == 'success' && 'release-signed' || 'release-unsigned' }}
+          name: release-unsigned
           path: release
 
       - name: Publish
@@ -290,10 +219,13 @@ jobs:
             echo
             echo "Bring your own copy of Halo: no game files are included."
             if [ -n "$NOTES" ]; then echo; echo "$NOTES"; fi
-            if [ "$SIGNED" != true ]; then echo; echo "Not signed yet: the in-game updater does not install this build."; fi
             echo
+            echo "Not signed yet: the in-game updater installs it once it is signed."
+            echo
+            echo "Version: $VERSION"
             echo "Chupathingy32: $COMMIT"
             echo "Game: $GAME"
+            echo "Build: $GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID"
             echo
             echo "Free software under the GNU GPL, version 3 or later, with no warranty. Source: https://github.com/$GH_REPO/tree/$COMMIT"
           } > notes.md
@@ -304,12 +236,9 @@ jobs:
               if gh release view "$TAG" > /dev/null 2>&1; then
                 echo "::error::$TAG is released already"; exit 1
               fi
-              if [ "$SIGNED" = true ]; then
-                gh release create "$TAG" "${files[@]}" --verify-tag --title "Chupathingy32 $TAG" --notes-file notes.md --latest
-              else
-                echo "::warning::not signed (repository variable SIGNING): published as a draft"
-                gh release create "$TAG" "${files[@]}" --verify-tag --title "Chupathingy32 $TAG" --notes-file notes.md --draft
-              fi ;;
+              # (a draft until it is signed: ChupathingyCE's release workflows
+              # sign it and publish it as latest)
+              gh release create "$TAG" "${files[@]}" --verify-tag --title "Chupathingy32 $TAG" --notes-file notes.md --draft ;;
             testing|nightly)
               title="Chupathingy32 test build $VERSION"
               [ "$KIND" = nightly ] && title="Chupathingy32 nightly $VERSION"
@@ -317,13 +246,5 @@ jobs:
               gh release delete "$TAG" --yes --cleanup-tag > /dev/null 2>&1 || true
               gh release create "$TAG" "${files[@]}" --target "$COMMIT" --prerelease --latest=false \
                 --title "$title" --notes-file notes.md
-              # (the testing channel's feed: the list, on the fixed "testing"
-              # pre-release, which the updaters on that channel read)
-              if [ "$KIND" = testing ] && [ "$SIGNED" = true ]; then
-                if ! gh release view testing > /dev/null 2>&1; then
-                  printf 'The testing channel'"'"'s feed: the newest test build'"'"'s list of update files. The builds are on their own pre-releases.\n' > feed.md
-                  gh release create testing --target "$COMMIT" --prerelease --latest=false --title "Testing channel" --notes-file feed.md
-                fi
-                gh release upload testing release/updates.json release/updates.json.sig --clobber
-              fi ;;
+              ;;
           esac
