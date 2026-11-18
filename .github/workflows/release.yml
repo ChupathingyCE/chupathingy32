@@ -212,6 +212,15 @@ jobs:
               nightly) echo "Tonight's build of Chupathingy32, $VERSION, for 32-bit Windows and 32-bit Linux (x86), with the game's newest main. Untested." ;;
             esac
             echo
+            # (these four before anything given by hand: the signing
+            # workflow reads the first line of each)
+            echo "Version: $VERSION"
+            echo "Chupathingy32: $COMMIT"
+            echo "Game: $GAME"
+            echo "Build: $GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID"
+            echo
+            echo "Not signed yet: the in-game updater installs it once it is signed."
+            echo
             echo "- Windows (32-bit): chupathingyce-windows-release.zip"
             echo "- Linux (32-bit): chupathingyce-linux-release.zip"
             echo
@@ -219,13 +228,6 @@ jobs:
             echo
             echo "Bring your own copy of Halo: no game files are included."
             if [ -n "$NOTES" ]; then echo; echo "$NOTES"; fi
-            echo
-            echo "Not signed yet: the in-game updater installs it once it is signed."
-            echo
-            echo "Version: $VERSION"
-            echo "Chupathingy32: $COMMIT"
-            echo "Game: $GAME"
-            echo "Build: $GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID"
             echo
             echo "Free software under the GNU GPL, version 3 or later, with no warranty. Source: https://github.com/$GH_REPO/tree/$COMMIT"
           } > notes.md

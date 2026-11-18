@@ -60,8 +60,9 @@ game's releases. Until then a release here is a draft, and a test build or a
 nightly is an unsigned pre-release: it can be downloaded by hand, but no
 updater installs it.
 
-Signing checks the build first: the run named on the release notes'
-`Build:` line must be this repository's Release workflow, on main or the
+The notes start with `Version:`, `Chupathingy32:`, `Game:` and `Build:`
+lines, before anything given by hand. Signing checks the build first: the
+run named on the release notes' `Build:` line must be this repository's Release workflow, on main or the
 release's tag, at the commit the notes name, and the game's commit must be
 on the game's main or a release branch. It signs that run's own files (its
 `release-unsigned` artifact), adds `updates.json` and the signatures to the
@@ -79,8 +80,9 @@ pre-release here, and the nightly channel the `nightly` pre-release. The
 the game's releases.
 
 `HALO_UPDATE_REPOSITORY` needs the game change in ChupathingyCE/chupathingyce
-#1461. A game commit from before it ignores the setting, and its builds look
-on the game's releases.
+#1461. A game commit from before it would ignore the setting and look on the
+game's releases, so `tools/c32_build.py` refuses to make a release, a test
+build or a nightly from one.
 
 Installs that came from the game's releases (0.9.1a and older) still look
 there. The plan for the move: the game's next release carries the 32-bit
