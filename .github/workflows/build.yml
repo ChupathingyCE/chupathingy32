@@ -32,6 +32,10 @@ on:
         default: ""
   workflow_call:
     inputs:
+      game-ref:
+        description: A commit of the game to build instead of the submodule's (the nightly's; empty, the submodule's)
+        type: string
+        default: ""
       ref:
         description: The commit of this repository to build (a tag; empty, the run's)
         type: string

@@ -1,0 +1,329 @@
+name: Release
+
+# Chupathingy32's releases, test builds and nightlies of the 32-bit Windows
+# and Linux builds (docs/releases.md), the same three kinds the game has:
+#
+#   release  a pushed tag v<VERSION>, VERSION being the game's at the tag's
+#            submodule commit (git tag v0.9.2 && git push origin v0.9.2).
+#            Built as that version, a release's build (its updater looks for
+#            newer releases here), published as v<VERSION>, marked latest.
+#   testing  by hand (Actions, Release, Run workflow, kind testing): this
+#            repository's main as <VERSION>-testing.<serial>, the serial the
+#            build's time (UTC, YYYYMMDDHHMM), published as the pre-release
+#            v<VERSION>-testing, replacing the last one, and its list copied
+#            to the fixed "testing" pre-release, the testing channel's feed.
+#   nightly  every night (once the repository variable NIGHTLY_PUBLISH is
+#            true) and by hand: main, with the game moved to the game's own
+#            main in the run only, as <VERSION>-nightly.<serial>, published
+#            as the pre-release "nightly", replacing the last. A night on
+#            which neither main changed builds nothing.
+#
+# Test builds and nightlies are never marked latest, so players on the
+# release channel never see them.
+#
+# Signing (the game's tools/update_sign.py, the same keys and the same
+# format as the game's releases): each zip's .sig (releases), and
+# updates.json with updates.json.sig, the list the self-updaters read. It
+# runs only when the repository variable SIGNING is true, in the environment
+# "signing" with the secret UPDATE_SIGNING_KEY, the update key set's primary
+# key (the same environment and secret name as the game's release workflow).
+# The game has no prerelease key yet, so test builds and nightlies are
+# signed with it too, as the game's are; once one is made, they move to the
+# environment "signing-prerelease" and UPDATE_PRERELEASE_KEY. Until SIGNING
+# is on, a release is published as a draft, and test builds and nightlies
+# unsigned: they can be downloaded, but no updater takes them.
+on:
+  push:
+    tags:
+      - "v*"
+  schedule:
+    - cron: "23 8 * * *"
+  workflow_dispatch:
+    inputs:
+      kind:
+        description: testing (a test build of main) or nightly
+        type: choice
+        options:
+          - testing
+          - nightly
+        default: testing
+      notes:
+        description: What this build is for (added to the notes)
+        type: string
+        default: ""
+      force:
+        description: "A nightly: build even if nothing changed since the last"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event_name == 'push' && github.ref || inputs.kind || 'nightly' }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      kind: ${{ steps.plan.outputs.kind }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      ref: ${{ steps.plan.outputs.ref }}
+      commit: ${{ steps.plan.outputs.commit }}
+      game: ${{ steps.plan.outputs.game }}
+      game_ref: ${{ steps.plan.outputs.game_ref }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      GAME_REPO: ChupathingyCE/chupathingyce
+      EVENT: ${{ github.event_name }}
+      KIND: ${{ inputs.kind }}
+      FORCE: ${{ inputs.force }}
+      NIGHTLY_PUBLISH: ${{ vars.NIGHTLY_PUBLISH }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref || 'main' }}
+
+      - name: Plan
+        id: plan
+        run: |
+          out() { echo "$1=$2" >> "$GITHUB_OUTPUT"; echo "$1=$2"; }
+          commit="$(git rev-parse HEAD)"
+          game="$(git rev-parse HEAD:chupathingyce)"
+          serial="$(date -u +%Y%m%d%H%M)"
+          kind="$KIND"
+          [ "$EVENT" = push ] && kind=release
+          [ "$EVENT" = schedule ] && kind=nightly
+          game_ref=
+          if [ "$kind" = nightly ]; then
+            if [ "$EVENT" = schedule ] && [ "$NIGHTLY_PUBLISH" != true ]; then
+              echo "Nightlies are off (repository variable NIGHTLY_PUBLISH): no build."
+              out build false
+              exit 0
+            fi
+            game="$(gh api "repos/$GAME_REPO/commits/main" --jq .sha)"
+            game_ref="$game"
+            if body="$(gh release view nightly --json body --jq .body 2>/dev/null)"; then
+              last_c32="$(printf '%s\n' "$body" | sed -n 's/^Chupathingy32: \([0-9a-f]\{40\}\).*/\1/p' | head -1)"
+              last_game="$(printf '%s\n' "$body" | sed -n 's/^Game: \([0-9a-f]\{40\}\).*/\1/p' | head -1)"
+              if [ "$commit" = "$last_c32" ] && [ "$game" = "$last_game" ] && [ "$FORCE" != true ]; then
+                echo "Nothing changed since the last nightly: no build."
+                out build false
+                exit 0
+              fi
+            fi
+          fi
+          # (the game's VERSION at the commit that is built)
+          base="$(gh api "repos/$GAME_REPO/contents/VERSION?ref=$game" -H "Accept: application/vnd.github.raw" | tr -d '[:space:]')"
+          case "$kind" in
+            release)
+              version="$base"
+              tag="$GITHUB_REF_NAME"
+              if [ "$tag" != "v$base" ]; then
+                echo "::error::the tag is $tag, but the game's VERSION at the submodule's commit ($game) is $base: tag v$base"
+                exit 1
+              fi ;;
+            testing)
+              version="$base-testing.$serial"
+              tag="v$base-testing" ;;
+            nightly)
+              version="$base-nightly.$serial"
+              tag="nightly" ;;
+            *)
+              echo "::error::unknown kind $kind"; exit 1 ;;
+          esac
+          out build true
+          out kind "$kind"
+          out version "$version"
+          out tag "$tag"
+          out ref "$commit"
+          out commit "$commit"
+          out game "$game"
+          out game_ref "$game_ref"
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ needs.plan.outputs.ref }}
+      game-ref: ${{ needs.plan.outputs.game_ref }}
+      version: ${{ needs.plan.outputs.version }}
+      release: ${{ needs.plan.outputs.kind == 'release' }}
+
+  package:
+    needs: [plan, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: c32-*
+          path: artifacts
+
+      - name: Package
+        run: |
+          python3 tools/c32_package.py artifacts release
+          ls -l release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-unsigned
+          path: release/
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
+
+  sign:
+    needs: [plan, package]
+    if: vars.SIGNING == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: signing
+    env:
+      KIND: ${{ needs.plan.outputs.kind }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      GAME: ${{ needs.plan.outputs.game }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          submodules: true
+
+      # (the game's tools/update_sign.py and keys at the commit that was built)
+      - name: The game's commit
+        env:
+          GAME_REF: ${{ needs.plan.outputs.game_ref }}
+        run: |
+          if [ -n "$GAME_REF" ]; then
+            git -C chupathingyce fetch --depth 1 origin "$GAME_REF"
+            git -C chupathingyce checkout --detach FETCH_HEAD
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-unsigned
+          path: release
+
+      - name: Sign
+        env:
+          SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set +x
+          case "$SIGNING_KEY" in
+            *"PRIVATE KEY"*) ;;
+            *) echo "::error::UPDATE_SIGNING_KEY is not set in the environment signing"; exit 1 ;;
+          esac
+          umask 077
+          key="$(mktemp "$RUNNER_TEMP/key.XXXXXX")"
+          trap 'rm -f "$key"' EXIT
+          printf '%s\n' "$SIGNING_KEY" > "$key"
+          zips=(release/chupathingyce-*.zip)
+          # (a release's zips have their own .sig, for builds from before the
+          # list; a test build's or a nightly's only the list)
+          if [ "$KIND" = release ]; then
+            python3 chupathingyce/tools/update_sign.py sign "$key" "$VERSION" "${zips[@]}"
+          fi
+          python3 chupathingyce/tools/update_sign.py manifest "$key" "$VERSION" --tag "$TAG" \
+            --channel "$KIND" --commit "$GAME" "${zips[@]}"
+          cat release/updates.json
+
+      - name: Check the signatures
+        if: needs.plan.outputs.kind == 'release'
+        run: python3 chupathingyce/tools/update_sign.py verify "$VERSION" release/chupathingyce-*.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-signed
+          path: release/
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
+
+  publish:
+    needs: [plan, package, sign]
+    if: ${{ !cancelled() && needs.package.result == 'success' && needs.sign.result != 'failure' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      KIND: ${{ needs.plan.outputs.kind }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      COMMIT: ${{ needs.plan.outputs.commit }}
+      GAME: ${{ needs.plan.outputs.game }}
+      SIGNED: ${{ needs.sign.result == 'success' }}
+      NOTES: ${{ inputs.notes }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.sign.result == 'success' && 'release-signed' || 'release-unsigned' }}
+          path: release
+
+      - name: Publish
+        run: |
+          ls -l release
+          {
+            case "$KIND" in
+              release) echo "Chupathingy $VERSION for 32-bit Windows and 32-bit Linux (x86). The same game as Chupathingy v$VERSION: https://github.com/ChupathingyCE/chupathingyce/releases/tag/v$VERSION" ;;
+              testing) echo "A test build of Chupathingy32, $VERSION, for 32-bit Windows and 32-bit Linux (x86). Please try it and report bugs in #bug-reports on the Discord." ;;
+              nightly) echo "Tonight's build of Chupathingy32, $VERSION, for 32-bit Windows and 32-bit Linux (x86), with the game's newest main. Untested." ;;
+            esac
+            echo
+            echo "- Windows (32-bit): chupathingyce-windows-release.zip"
+            echo "- Linux (32-bit): chupathingyce-linux-release.zip"
+            echo
+            echo "On 64-bit Windows, Linux or macOS, the game's own builds run better: https://github.com/ChupathingyCE/chupathingyce/releases/latest"
+            echo
+            echo "Bring your own copy of Halo: no game files are included."
+            if [ -n "$NOTES" ]; then echo; echo "$NOTES"; fi
+            if [ "$SIGNED" != true ]; then echo; echo "Not signed yet: the in-game updater does not install this build."; fi
+            echo
+            echo "Chupathingy32: $COMMIT"
+            echo "Game: $GAME"
+            echo
+            echo "Free software under the GNU GPL, version 3 or later, with no warranty. Source: https://github.com/$GH_REPO/tree/$COMMIT"
+          } > notes.md
+          cat notes.md
+          files=(release/*)
+          case "$KIND" in
+            release)
+              if gh release view "$TAG" > /dev/null 2>&1; then
+                echo "::error::$TAG is released already"; exit 1
+              fi
+              if [ "$SIGNED" = true ]; then
+                gh release create "$TAG" "${files[@]}" --verify-tag --title "Chupathingy32 $TAG" --notes-file notes.md --latest
+              else
+                echo "::warning::not signed (repository variable SIGNING): published as a draft"
+                gh release create "$TAG" "${files[@]}" --verify-tag --title "Chupathingy32 $TAG" --notes-file notes.md --draft
+              fi ;;
+            testing|nightly)
+              title="Chupathingy32 test build $VERSION"
+              [ "$KIND" = nightly ] && title="Chupathingy32 nightly $VERSION"
+              # (the last one replaced, its tag with it)
+              gh release delete "$TAG" --yes --cleanup-tag > /dev/null 2>&1 || true
+              gh release create "$TAG" "${files[@]}" --target "$COMMIT" --prerelease --latest=false \
+                --title "$title" --notes-file notes.md
+              # (the testing channel's feed: the list, on the fixed "testing"
+              # pre-release, which the updaters on that channel read)
+              if [ "$KIND" = testing ] && [ "$SIGNED" = true ]; then
+                if ! gh release view testing > /dev/null 2>&1; then
+                  printf 'The testing channel'"'"'s feed: the newest test build'"'"'s list of update files. The builds are on their own pre-releases.\n' > feed.md
+                  gh release create testing --target "$COMMIT" --prerelease --latest=false --title "Testing channel" --notes-file feed.md
+                fi
+                gh release upload testing release/updates.json release/updates.json.sig --clobber
+              fi ;;
+          esac
