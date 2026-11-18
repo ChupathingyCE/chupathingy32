@@ -25,7 +25,9 @@ Past that, what a frame at Bloodgulch's spawn gives up: the sky, which the
 fog's color fills in (render_sky.c), the transparent parts of the level's
 objects (render_objects.c), scenery nothing can touch, as plants (the same)
 and the HUD's frames and backgrounds (hud_draw.c), each a setting of its own
-and all kept in a cutscene and at the main menu. The driver's own share is launch.sh's: the shader
+and all kept in a cutscene and at the main menu. The transparent parts and
+the plants are cover too, so a network game keeps them unless
+display.performance_online_cuts is on. The driver's own share is launch.sh's: the shader
 compiler's load-time constants, worked out again at every draw, are off.
 
 Holding Back and pressing down on the d-pad (or F9) switches it, with a
@@ -207,14 +209,28 @@ static boolean performance_setting(const char *name, unsigned long *read_at, boo
 	return *value;
 }
 
+/* whether what is see-through cover is kept in this game: the objects'
+transparent parts and the plants are left out offline, but drawn in a
+network game, where leaving them out would show what other players hide
+behind, unless display.performance_online_cuts is on */
+static boolean performance_cover_kept(void)
+{
+	static unsigned long read_at = (unsigned long)-1;
+	static boolean online_cuts = FALSE;
+
+	return game_connection() != _game_connection_local &&
+		!performance_setting("display.performance_online_cuts", &read_at, &online_cuts);
+}
+
 /* whether the level's objects draw their transparent parts (a cutscene
-keeps them, framed for what is close) */
+keeps them, framed for what is close, and a network game too:
+performance_cover_kept) */
 boolean console_performance_object_transparents(void)
 {
 	static unsigned long read_at = (unsigned long)-1;
 	static boolean value = TRUE;
 
-	return !performance_cutting() ||
+	return !performance_cutting() || performance_cover_kept() ||
 		performance_setting("display.performance_object_transparents", &read_at, &value);
 }
 
@@ -240,7 +256,7 @@ real console_performance_decoration_distance(void)
 	static unsigned long read_at = (unsigned long)-1;
 	static real distance = 0.0f;
 
-	if (!performance_cutting())
+	if (!performance_cutting() || performance_cover_kept())
 		return 0.0f;
 	if (read_at != config_changes())
 	{
