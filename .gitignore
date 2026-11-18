@@ -1,0 +1,21 @@
+# Build files
+build/
+dist/
+release/
+.ccache/
+.ninja_*
+build.ninja
+compile_commands.json
+__pycache__
+
+# The Steam Link SDK, fetched by the build (never commit)
+steamlink-sdk/
+
+# Disc images and the game's own files (never commit)
+*.iso
+*.xiso
+*.map
+*.bik
+
+# Signing keys (never commit)
+*.pem
