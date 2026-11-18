@@ -1,7 +1,7 @@
 """package.py: the Steam Link app as build/chupathingyce.tgz, which the box
 installs at boot from steamlink/apps/ on a USB stick, and as
 build/chupathingyce-steamlink-release.zip, the same files, side by side as the
-updater takes them (updater.c), for release.py to sign. The game alone, with
+updater takes them (updater.c), for a release to carry. The game alone, with
 no map, sound or art of Halo's: the player's disc image gives those."""
 import gzip
 import io

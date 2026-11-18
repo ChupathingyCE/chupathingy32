@@ -102,13 +102,15 @@ STEAMLINK_CAPABILITIES = ["-DHALO_CONSOLE_XBOX_RENDER_SIZES",
                           # (HALO_CONSOLE_NO_STUBBS does not compile at v0.9.1:
                           # damage.c; upstream's #1219 after it)
                           "-DHALO_CONSOLE_NO_TITLE_CHOICE"]
-# updates: this repository's releases, from warman.world (publish.py), laid
-# out as GitHub's, signed with the port's own key (include/
-# halo_port_update_keys.h, release.py); run.sh is replaced with the game, and
-# 42 is the exit that has run.sh start the new one
+# updates: Chupathingy32's releases on GitHub (HALO_UPDATE_REPOSITORY,
+# ChupathingyCE/chupathingyce#1461), their chupathingyce-steamlink-release.zip,
+# signed with the game's update keys as the game's own releases are
+# (port/linux/src/update_key.h); run.sh is replaced with the game, and 42 is
+# the exit that has run.sh start the new one. Boxes on a build from
+# warman.world (0.9.1a and before) still look there, with that server's key,
+# until its last release moves them here
 STEAMLINK_UPDATES = ['-DHALO_PORT_UPDATE_PLATFORM=\\"steamlink\\"',
-                     '-DHALO_PORT_UPDATE_API=\\"https://warman.world/fastdl/chupathingyce-steamlink\\"',
-                     '-DHALO_PORT_UPDATE_REPOSITORY=\\"JizzyRivers/chupathingyce-steamlink\\"',
+                     '-DHALO_UPDATE_REPOSITORY=\\"ChupathingyCE/chupathingy32\\"',
                      '-DHALO_PORT_UPDATE_SCRIPT=\\"run.sh\\"',
                      "-DHALO_PORT_UPDATE_RESTART_EXIT_CODE=42"]
 # the port's own platform units

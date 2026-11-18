@@ -114,6 +114,11 @@ jobs:
           MARVELL_SDK_PATH: ${{ github.workspace }}/steamlink-sdk
         run: |
           cd chupathingyce
+          # (the box updates from this repository's releases, with the game's
+          # keys: a game from before HALO_UPDATE_REPOSITORY would build one
+          # that looks on the game's releases instead)
+          grep -q HALO_UPDATE_REPOSITORY port/linux/src/updater.c \
+            || { echo "::error::the game has no HALO_UPDATE_REPOSITORY (chupathingyce#1461): move the submodule past it"; exit 1; }
           python3 configure.py --release --console-port ../port/steamlink
           grep -q "^build steamlink:" build.ninja || { echo "::error::configure did not set up the Steam Link build"; exit 1; }
           ninja steamlink
