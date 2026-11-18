@@ -8,7 +8,7 @@ name: Release
 #            Built as that version, a release's build (its updater looks for
 #            newer releases here), published as v<VERSION>, marked latest.
 #   testing  by hand (Actions, Release, Run workflow, kind testing): this
-#            repository's main as <VERSION>-testing.<serial>, the serial the
+#            repository's main (or the branch it is started on) as <VERSION>-testing.<serial>, the serial the
 #            build's time (UTC, YYYYMMDDHHMM), published as the pre-release
 #            v<VERSION>-testing, replacing the last one, and its list copied
 #            to the fixed "testing" pre-release, the testing channel's feed.
@@ -85,9 +85,9 @@ jobs:
       FORCE: ${{ inputs.force }}
       NIGHTLY_PUBLISH: ${{ vars.NIGHTLY_PUBLISH }}
     steps:
+      # (the tag, or the branch the run was started on: main for test
+      # builds and nightlies)
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'push' && github.ref || 'main' }}
 
       - name: Plan
         id: plan
