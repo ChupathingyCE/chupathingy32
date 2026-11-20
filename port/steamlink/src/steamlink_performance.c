@@ -323,8 +323,6 @@ void steamlink_performance_update(int switched)
 			performance_keep();
 		else
 			performance_restore();
-		/* (newest on top: the state reads first) */
-		steamlink_hud_message("did haguero vibe code this shit?");
 		steamlink_hud_message(performance_on ? "performance mode on" : "performance mode off");
 	}
 	if (!performance_on)
