@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 The Chupathingy contributors
+# SPDX-FileCopyrightText: 2026 Milenko x Horrible Dev
+# SPDX-License-Identifier: GPL-3.0-or-later
 """Builds one Chupathingy32 target in one configuration, and collects what it
 built into dist/:
 
@@ -17,6 +20,10 @@ the packaging are the game's, and none of it is copied here. What this adds:
   update from the game's releases, so a build that looks for updates (a
   release, a test build, a nightly) is refused on such a commit; a -dev
   build never looks for updates and is still built.
+- Chupathingy32's own icon (art/icon, tools/c32_icon.py): on Windows the
+  game's port/windows/halo.ico is swapped for art/icon/chupathingy32.ico
+  while the game builds, and put back after, so chupathingy.exe carries it;
+  on Linux the icon's PNGs and desktop-entry.sh go beside the game.
 - The game's dist/chupathingyce-<platform>-<config> folder, moved to this
   repository's dist/, and its symbols (Windows: the PDBs and the map) to
   symbols/, apart from what players download.
@@ -48,6 +55,14 @@ PRERELEASE = re.compile(r"-(testing|nightly)\.\d{12}$")
 # Chupathingy32's targets that are the game's own builds: the game's name
 # for each (tools/ci_build.py)
 GAME_BUILDS = {"windows": "windows", "linux": "linux"}
+ICON = ROOT / "art" / "icon"
+# the game's Windows icon, which its resource script (port/windows/halo.rc)
+# builds into the executable
+GAME_WINDOWS_ICON = GAME / "port" / "windows" / "halo.ico"
+# what goes beside the Linux game: the icon at the sizes a desktop's menu
+# uses, and the script that makes a menu entry for the folder it is in
+LINUX_ICON_SIZES = (16, 24, 32, 48, 64, 128, 256)
+LINUX_DESKTOP_SCRIPT = ROOT / "tools" / "linux" / "desktop-entry.sh"
 
 
 def looks_for_updates(env: dict) -> bool:
@@ -78,7 +93,15 @@ def main() -> int:
     print(f"updates from {env['HALO_UPDATE_REPOSITORY']}'s releases", flush=True)
     command = [sys.executable, "tools/ci_build.py", platform, args.config]
     print("+", " ".join(command), f"(in {GAME.name})", flush=True)
-    subprocess.run(command, cwd=GAME, env=env, check=True)
+    if platform == "windows":
+        game_icon = GAME_WINDOWS_ICON.read_bytes()
+        GAME_WINDOWS_ICON.write_bytes((ICON / "chupathingy32.ico").read_bytes())
+        try:
+            subprocess.run(command, cwd=GAME, env=env, check=True)
+        finally:
+            GAME_WINDOWS_ICON.write_bytes(game_icon)
+    else:
+        subprocess.run(command, cwd=GAME, env=env, check=True)
 
     name = f"chupathingyce-{platform}-{args.config}"
     built = GAME / "dist" / name
@@ -93,6 +116,11 @@ def main() -> int:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(source), str(target))
             print(f"{source.relative_to(ROOT)} -> {target.relative_to(ROOT)}", flush=True)
+    if platform == "linux":
+        # (flat, at the folder's top: the self-updater takes only those)
+        for size in LINUX_ICON_SIZES:
+            shutil.copyfile(ICON / f"chupathingy32-{size}.png", ROOT / "dist" / name / f"chupathingy32-{size}.png")
+        shutil.copyfile(LINUX_DESKTOP_SCRIPT, ROOT / "dist" / name / LINUX_DESKTOP_SCRIPT.name)
     for path in sorted((ROOT / "dist" / name).iterdir()):
         print(f"  {path.name} ({path.stat().st_size} bytes)")
     return 0
