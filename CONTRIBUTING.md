@@ -7,9 +7,9 @@ pinned here as the `chupathingyce` submodule.
 
 ## Where a change goes
 
-- **Here:** the build and release workflows, `tools/`, and the code a
-  target needs that no other build does (the Steam Link's, under
-  `port/steamlink/`, once it moves here).
+- **Here:** the build and release workflows, `tools/`, the icon
+  (`art/icon/`), and the code a target needs that no other build does:
+  the Steam Link's, under `port/steamlink/`.
 - **The game:** everything else, including the hooks older hardware uses
   (the `HALO_CONSOLE_*` capabilities, the OpenGL ES path, the updater). A
   change there must leave the other builds as they are. Once it's merged, a
@@ -24,7 +24,12 @@ or keys.
 - Open them against `ChupathingyCE/chupathingy32`'s `main`.
 - One change per pull request, with how you tested it: which machine and
   which build.
-- The Build check passes for both targets.
+- The Build check passes for both targets, and the Steam Link check for
+  changes under `port/steamlink/`.
+- Contributions are under the GNU GPL, version 3 or later, like the rest
+  of the repository.
+
+[docs/building.md](docs/building.md) has how to build each target.
 
 Contributors are credited in the release notes. The game's
 [CONTRIBUTING.md](https://github.com/ChupathingyCE/chupathingyce/blob/main/CONTRIBUTING.md)
