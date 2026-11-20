@@ -19,3 +19,11 @@ steamlink-sdk/
 
 # Signing keys (never commit)
 *.pem
+
+# Symbols kept apart from the downloads
+symbols/
+
+# System files
+.DS_Store
+Thumbs.db
+*.pyc

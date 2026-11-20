@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 The Chupathingy contributors
+# SPDX-FileCopyrightText: 2026 Milenko x Horrible Dev
+# SPDX-License-Identifier: GPL-3.0-or-later
 name: Steam Link
 
 # The Steam Link build (port/steamlink, JizzyRivers' port), for every push to
@@ -53,8 +56,9 @@ jobs:
           sudo apt-get install -y -q --no-install-recommends clang lld llvm cmake ninja-build file
           clang --version | head -1
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          persist-credentials: false
           submodules: true
 
       - name: Use the requested game commit
@@ -69,7 +73,7 @@ jobs:
           grep -q "SDL_COMMIT = \"$SDL_COMMIT\"" chupathingyce/tools/android_build.py \
             || echo "::warning::the game's SDL pin moved from $SDL_TAG: update SDL_TAG and SDL_COMMIT here"
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         id: sdk
         with:
           path: steamlink-sdk
@@ -86,7 +90,7 @@ jobs:
           git fetch -q --depth 1 --filter=blob:none origin "$STEAMLINK_SDK_COMMIT"
           git checkout -q FETCH_HEAD
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: steps.sdk.outputs.cache-hit != 'true'
         with:
           path: steamlink-sdk
@@ -130,7 +134,7 @@ jobs:
           python3 port/steamlink/package.py
           ls -l build/chupathingyce.tgz build/chupathingyce-steamlink-release.zip
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: c32-steamlink
           path: |
