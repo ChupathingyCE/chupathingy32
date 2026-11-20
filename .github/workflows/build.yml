@@ -178,6 +178,12 @@ jobs:
           file dist/chupathingyce-linux-release/chupathingy | grep -q "ELF 32-bit LSB" \
             || { echo "::error::the Linux game is not a 32-bit x86 program"; exit 1; }
 
+      - name: Icon
+        run: |
+          for file in chupathingy32-16.png chupathingy32-256.png desktop-entry.sh; do
+            test -f "dist/chupathingyce-linux-release/$file" || { echo "::error::$file is not beside the Linux game"; exit 1; }
+          done
+
       - name: Compile cache
         run: ccache --show-stats
 
@@ -319,6 +325,20 @@ jobs:
           machine = struct.unpack_from("<H", data, offset + 4)[0]
           print(f"chupathingy.exe machine 0x{machine:04x}")
           sys.exit(0 if machine == 0x014C else "the Windows game is not a 32-bit x86 program")
+          PY
+
+      # (the icon's images go into the executable as they are in the .ico:
+      # its 16-pixel one is art/icon/chupathingy32-16.png, byte for byte)
+      - name: Icon
+        run: |
+          python - <<'PY'
+          import sys
+          icon = open("art/icon/chupathingy32-16.png", "rb").read()
+          for name in ("chupathingy.exe", "halo.exe"):
+              data = open(f"dist/chupathingyce-windows-release/{name}", "rb").read()
+              print(f"{name}: Chupathingy32's icon {'found' if icon in data else 'missing'}")
+              if icon not in data:
+                  sys.exit(f"{name} does not carry Chupathingy32's icon")
           PY
 
       - name: Compile cache
