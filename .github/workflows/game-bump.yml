@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 The Chupathingy contributors
+# SPDX-FileCopyrightText: 2026 Milenko x Horrible Dev
+# SPDX-License-Identifier: GPL-3.0-or-later
 name: Game bump
 
 # Opens a pull request that moves the game (the chupathingyce submodule) to
@@ -17,9 +20,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
-  actions: write
+  contents: read
 
 concurrency:
   group: game-bump
@@ -29,6 +30,11 @@ jobs:
   bump:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # (pushes bump/game, opens or edits its pull request and starts its checks)
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
     outputs:
       head: ${{ steps.bump.outputs.head }}
       runs: ${{ steps.bump.outputs.runs }}
@@ -41,7 +47,7 @@ jobs:
       CHECKS: build.yml
     steps:
       # (the submodule is not fetched: only its recorded commit changes)
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: main
 
