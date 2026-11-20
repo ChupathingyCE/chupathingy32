@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 The Chupathingy contributors
+# SPDX-FileCopyrightText: 2026 Milenko x Horrible Dev
+# SPDX-License-Identifier: GPL-3.0-or-later
 name: Build
 
 # Chupathingy32's builds: 32-bit Windows (x86) and 32-bit Linux (x86), for
@@ -96,8 +99,8 @@ jobs:
           echo "deb [signed-by=/etc/apt/keyrings/apt.llvm.org.asc] http://apt.llvm.org/noble/ llvm-toolchain-noble-$LLVM_MAJOR main" \
             | sudo tee /etc/apt/sources.list.d/llvm.list
           apt_try apt-get update -q
-          apt_try apt-get install -y -q --no-install-recommends clang-$LLVM_MAJOR lld-$LLVM_MAJOR llvm-$LLVM_MAJOR \
-            libclang-rt-$LLVM_MAJOR-dev gcc gcc-multilib libc6-dev-i386 cmake pkg-config libwayland-bin \
+          apt_try apt-get install -y -q --no-install-recommends "clang-$LLVM_MAJOR" "lld-$LLVM_MAJOR" "llvm-$LLVM_MAJOR" \
+            "libclang-rt-$LLVM_MAJOR-dev" gcc gcc-multilib libc6-dev-i386 cmake pkg-config libwayland-bin \
             ninja-build ccache python3-pytest zstd
           echo "/usr/lib/llvm-$LLVM_MAJOR/bin" >> "$GITHUB_PATH"
         env:
@@ -110,8 +113,9 @@ jobs:
           cmake --version | head -n 1
           ccache --version | head -n 1
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          persist-credentials: false
           ref: ${{ inputs.ref }}
           submodules: true
 
@@ -126,14 +130,14 @@ jobs:
           git -C chupathingyce log -1 --oneline
           echo "VERSION $(cat chupathingyce/VERSION)"
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: env.CACHE_RESTORE == 'true'
         with:
           path: .ccache
           key: ccache-linux-x86-clang22-${{ github.sha }}
           restore-keys: ccache-linux-x86-clang22-
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         id: cache-downloads
         if: env.CACHE_RESTORE == 'true'
         with:
@@ -141,14 +145,14 @@ jobs:
           key: ffmpeg-source-${{ hashFiles('chupathingyce/tools/ffmpeg_build.py') }}
 
       # the system root and SDL's source, which the game's build downloads
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         id: cache-third-party
         if: env.CACHE_RESTORE == 'true'
         with:
           path: chupathingyce/build/linux/third_party
           key: linux-third-party-${{ hashFiles('chupathingyce/tools/linux_sysroot.py') }}
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         id: cache-bgfx
         if: env.CACHE_RESTORE == 'true'
         with:
@@ -183,14 +187,14 @@ jobs:
       - name: Compile cache
         run: ccache --show-stats
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: c32-linux-x86
           path: dist/
           if-no-files-found: error
           retention-days: 7
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: inputs.version != ''
         with:
           name: symbols-linux-x86
@@ -198,25 +202,25 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: ${{ success() && env.CACHE_SAVE == 'true' && steps.cache-downloads.outputs.cache-hit != 'true' }}
         with:
           path: chupathingyce/build/downloads
           key: ffmpeg-source-${{ hashFiles('chupathingyce/tools/ffmpeg_build.py') }}
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: ${{ success() && env.CACHE_SAVE == 'true' && steps.cache-third-party.outputs.cache-hit != 'true' }}
         with:
           path: chupathingyce/build/linux/third_party
           key: linux-third-party-${{ hashFiles('chupathingyce/tools/linux_sysroot.py') }}
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: ${{ success() && env.CACHE_SAVE == 'true' && steps.cache-bgfx.outputs.cache-hit != 'true' }}
         with:
           path: chupathingyce/build/bgfx
           key: bgfx-source-${{ runner.os }}-${{ hashFiles('chupathingyce/tools/bgfx_build.py', 'chupathingyce/tools/bgfx-patches/**') }}
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: ${{ success() && env.CACHE_SAVE == 'true' }}
         with:
           path: .ccache
@@ -245,8 +249,9 @@ jobs:
           Remove-Item ninja.zip, ccache.zip
           "$env:RUNNER_TEMP\tools" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          persist-credentials: false
           ref: ${{ inputs.ref }}
           submodules: true
 
@@ -261,14 +266,14 @@ jobs:
           git -C chupathingyce log -1 --oneline
           echo "VERSION $(cat chupathingyce/VERSION)"
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: env.CACHE_RESTORE == 'true'
         with:
           path: .ccache
           key: ccache-windows-x86-${{ github.sha }}
           restore-keys: ccache-windows-x86-
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         id: cache-downloads
         if: env.CACHE_RESTORE == 'true'
         with:
@@ -276,7 +281,7 @@ jobs:
           key: ffmpeg-source-${{ hashFiles('chupathingyce/tools/ffmpeg_build.py') }}
 
       # SDL's development package, which the game's configure.py fetches
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         id: cache-third-party
         if: env.CACHE_RESTORE == 'true'
         with:
@@ -288,14 +293,14 @@ jobs:
       - name: MSYS2 make
         run: /c/msys64/usr/bin/pacman.exe -S --noconfirm --needed make diffutils
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         id: cache-ffmpeg
         if: env.CACHE_RESTORE == 'true'
         with:
           path: chupathingyce/build/windows/ffmpeg
           key: windows-ffmpeg-${{ hashFiles('chupathingyce/tools/ffmpeg_build.py') }}
 
-      - uses: actions/cache/restore@v4
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         id: cache-bgfx
         if: env.CACHE_RESTORE == 'true'
         with:
@@ -339,7 +344,7 @@ jobs:
       - name: Compile cache
         run: ccache --show-stats
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: c32-windows-x86
           path: dist/
@@ -347,7 +352,7 @@ jobs:
           retention-days: 7
 
       # (chupathingy.exe's symbols, for crash reports; not a download)
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: inputs.version != ''
         with:
           name: symbols-windows-x86
@@ -355,31 +360,31 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: ${{ success() && env.CACHE_SAVE == 'true' && steps.cache-downloads.outputs.cache-hit != 'true' }}
         with:
           path: chupathingyce/build/downloads
           key: ffmpeg-source-${{ hashFiles('chupathingyce/tools/ffmpeg_build.py') }}
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: ${{ success() && env.CACHE_SAVE == 'true' && steps.cache-third-party.outputs.cache-hit != 'true' }}
         with:
           path: chupathingyce/build/windows/third_party
           key: windows-third-party-${{ hashFiles('chupathingyce/tools/windows_build.py') }}
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: ${{ success() && env.CACHE_SAVE == 'true' && steps.cache-ffmpeg.outputs.cache-hit != 'true' }}
         with:
           path: chupathingyce/build/windows/ffmpeg
           key: windows-ffmpeg-${{ hashFiles('chupathingyce/tools/ffmpeg_build.py') }}
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: ${{ success() && env.CACHE_SAVE == 'true' && steps.cache-bgfx.outputs.cache-hit != 'true' }}
         with:
           path: chupathingyce/build/bgfx
           key: bgfx-source-${{ runner.os }}-${{ hashFiles('chupathingyce/tools/bgfx_build.py', 'chupathingyce/tools/bgfx-patches/**') }}
 
-      - uses: actions/cache/save@v4
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         if: ${{ success() && env.CACHE_SAVE == 'true' }}
         with:
           path: .ccache
