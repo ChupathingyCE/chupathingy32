@@ -50,7 +50,9 @@ the game's signing tool only lists files named
 `chupathingyce-<platform>-<release|debug>.zip`. Renaming them would leave
 installs in the field without an update. The release notes and this
 repository's name say what they are. The Steam Link's will be
-`chupathingyce-steamlink-release.zip`.
+`chupathingyce-steamlink-release.zip`. The Steam Link isn't in the Release
+workflow yet: its builds are the Steam Link workflow's artifacts
+([steam-link.md](steam-link.md#getting-the-build)).
 
 ## Signing
 
