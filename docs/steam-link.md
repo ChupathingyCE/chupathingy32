@@ -13,7 +13,8 @@ spawn with performance mode on, less in heavier levels.
 
 Until a Chupathingy32 release carries it, the Steam Link build comes from
 this repository's [Steam Link workflow](../.github/workflows/steamlink.yml)
-on Actions. Each run keeps `c32-steamlink`, which holds:
+on Actions. Each run keeps `c32-steamlink` for 7 days (you need to be
+signed in to GitHub to download it), which holds:
 
 - `chupathingyce.tgz`: the app, for the USB stick.
 - `chupathingyce-steamlink-release.zip`: the same files for the updater.
@@ -76,9 +77,10 @@ Hold **Back** and press:
 ## Performance mode
 
 Performance mode is on by default. It leaves out what the box can't afford:
-decals, dynamic lights, reflections, specular, lens flares, the sky and the
-HUD's frames. Cutscenes and the main menu keep everything. It draws fewer lines and scales them up, fogs out the
-distance, and switches models to less detail sooner.
+decals, dynamic lights, reflections, specular and lens flares. It draws
+fewer lines and scales them up, and switches models to less detail sooner.
+In play it also leaves out the sky and the HUD's frames and fogs out the
+distance. Cutscenes and the main menu keep those.
 
 In network games it keeps everything that could be cover: see-through
 parts and plants are drawn as usual, so you can't see through what other

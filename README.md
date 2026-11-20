@@ -29,7 +29,7 @@ You need your own copy of Halo: Combat Evolved. No game files are included.
 | --- | --- | --- |
 | Windows, 32-bit (x86) | `chupathingyce-windows-release.zip` | Windows 10 or later. |
 | Linux, 32-bit (x86) | `chupathingyce-linux-release.zip` | glibc 2.31 or later (32-bit). Brings its own SDL3. |
-| Steam Link (2015) | `chupathingyce.tgz` | Test builds only for now. See [docs/steam-link.md](docs/steam-link.md). |
+| Steam Link (2015) | `chupathingyce.tgz` | Not in releases yet: from the Steam Link workflow. See [docs/steam-link.md](docs/steam-link.md). |
 
 On a 64-bit PC or a Mac, get
 [Chupathingy's own builds](https://github.com/ChupathingyCE/chupathingyce/releases/latest)
