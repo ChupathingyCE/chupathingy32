@@ -8,6 +8,8 @@ is worth a look too. This page covers what's different here.
 
 - **OpenGL only.** The 32-bit builds have no Vulkan renderer. Your graphics
   need OpenGL 3.3 or later.
+- **No ragdolls.** The physics they need isn't built for 32-bit, so the
+  setting isn't there.
 - **No AppImage** for 32-bit Linux. Use the zip.
 - **Not code signed.** Windows asks before the first start: choose
   **More info**, then **Run anyway**.
