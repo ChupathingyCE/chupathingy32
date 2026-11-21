@@ -98,6 +98,9 @@ The icon's pixel art is in `art/icon/`, at each size it's drawn at.
 the Steam Link's icon from it. Run it after changing the art, and commit
 what it writes.
 
+`python3 tools/c32_readme_art.py` makes the README's pictures in
+`art/readme/` from the icon. Run it after changing the icon too.
+
 ## Releases
 
 Releases, test builds and nightlies are made by the Release workflow and
