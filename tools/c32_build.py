@@ -24,6 +24,12 @@ the packaging are the game's, and none of it is copied here. What this adds:
   game's port/windows/halo.ico is swapped for art/icon/chupathingy32.ico
   while the game builds, and put back after, so chupathingy.exe carries it;
   on Linux the icon's PNGs and desktop-entry.sh go beside the game.
+- No ragdolls (the game's configure.py --without-ragdolls, through its
+  tools/ci_build.py): Jolt Physics, which they need, is C++17 that the
+  32-bit Windows toolchain cannot build against the runner's newer Visual
+  C++ library, and the 32-bit builds leave it out alike. The game hides the
+  setting in such a build. A game commit from before the option builds
+  with them, as it did.
 - The game's dist/chupathingyce-<platform>-<config> folder, moved to this
   repository's dist/, and its symbols (Windows: the PDBs and the map) to
   symbols/, apart from what players download.
@@ -49,6 +55,9 @@ REPOSITORY = "ChupathingyCE/chupathingy32"
 # what the game's tools/version.py has once it knows HALO_UPDATE_REPOSITORY
 # (ChupathingyCE/chupathingyce#1461)
 UPDATE_REPOSITORY_SUPPORT = "HALO_UPDATE_REPOSITORY"
+# what the game's tools/ci_build.py has once it can leave the ragdolls and
+# Jolt Physics out (ChupathingyCE/chupathingyce#1680)
+WITHOUT_RAGDOLLS = "--without-ragdolls"
 # a test build's or a nightly's version (the game's PRERELEASE_VERSION, in
 # short: the game's tools/version.py checks it in full)
 PRERELEASE = re.compile(r"-(testing|nightly)\.\d{12}$")
@@ -92,6 +101,8 @@ def main() -> int:
         return 1
     print(f"updates from {env['HALO_UPDATE_REPOSITORY']}'s releases", flush=True)
     command = [sys.executable, "tools/ci_build.py", platform, args.config]
+    if WITHOUT_RAGDOLLS in (GAME / "tools/ci_build.py").read_text(encoding="utf-8"):
+        command.append(WITHOUT_RAGDOLLS)
     print("+", " ".join(command), f"(in {GAME.name})", flush=True)
     if platform == "windows":
         game_icon = GAME_WINDOWS_ICON.read_bytes()
