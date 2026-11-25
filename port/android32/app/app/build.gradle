@@ -1,0 +1,101 @@
+plugins {
+    id "com.android.application"
+}
+
+// build/android32 in the repository root: stage/jniLibs/armeabi-v7a has the
+// game's libmain.so and SDL3's libSDL3.so (stage.py); SDL3's Java side is
+// the source tree the library was built from
+def repository = new File(rootDir, "../../..")
+// upstream's Android app (HaloActivity, the touch overlay, the updater, XisoExtractor): shared, not copied
+def gameApp = new File(repository, "chupathingyce/port/android/app/src/main")
+def sharedJava = new File(buildDir, "shared-java")
+def staged = new File(repository, "build/android32/stage")
+def sdlJava = new File(repository, "build/android32/SDL3/android-project/app/src/main/java")
+// the game's version (package.py gives it: the submodule's VERSION), as versionName; versionCode as
+// upstream makes it (major * 10000 + minor * 100 + patch: 0.9.1b is 901)
+def haloVersion = System.getenv("HALO_VERSION") ?: "0.9.1b-dev"
+def haloVersionCode = {
+    def found = (haloVersion =~ /^(\d+)\.(\d+)(?:\.(\d+))?/)
+    if (!found) throw new GradleException("the version ${haloVersion} does not start with major.minor.patch")
+    return Math.max(1, found[0][1].toInteger() * 10000 + found[0][2].toInteger() * 100 + (found[0][3] ?: "0").toInteger())
+}()
+
+// ChupathingyCE's signing key, as the 64-bit app's (port/android/app/build.gradle): keystore.properties in
+// this folder (storeFile, storePassword, keyAlias, keyPassword), never committed. Without it the release
+// build is unsigned (app-release-unsigned.apk), never signed with a stand-in key.
+def keystore = new Properties()
+def keystoreFile = rootProject.file("keystore.properties")
+if (keystoreFile.exists())
+    keystoreFile.withInputStream { keystore.load(it) }
+def signed = keystore["storeFile"] != null
+def releaseBuild = System.getenv("HALO_RELEASE_BUILD") == "1"
+
+android {
+    // the shared Java is com.halo.decomp
+    namespace "com.halo.decomp"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "dev.horrible.chupathingyce32"
+        // 28: getrandom and the other calls bionic has from Pie
+        minSdk 28
+        targetSdk 34
+        versionCode haloVersionCode
+        versionName haloVersion
+        buildConfigField "String", "HALO_VERSION", "\"${haloVersion}\""
+        buildConfigField "boolean", "HALO_RELEASE_BUILD", "false"
+        buildConfigField "String", "HALO_UPDATE_CHANNEL", "\"\""
+        buildConfigField "String", "HALO_UPDATE_ASSET", "\"chupathingyce-android32\""
+        // (no heap pointer tagging change: this build's pointers are 32-bit)
+        manifestPlaceholders = [heapPointerTagging: "true"]
+        ndk {
+            abiFilters "armeabi-v7a"
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    sourceSets {
+        main {
+            // (the shared Java is copied without the 64-bit app's LauncherActivity: ours, in src/main/java,
+            // takes its place, as UpdateReceiver starts it)
+            java.srcDirs += [sdlJava, sharedJava]
+            res.srcDirs += [new File(gameApp, "res")]
+            jniLibs.srcDirs = [new File(staged, "jniLibs")]
+        }
+    }
+
+    signingConfigs {
+        if (signed) {
+            release {
+                storeFile new File(keystore["storeFile"])
+                storePassword keystore["storePassword"]
+                keyAlias keystore["keyAlias"]
+                keyPassword keystore["keyPassword"]
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // (the game is native code: nothing for R8 to shrink in the few Java classes)
+            minifyEnabled false
+            if (signed) signingConfig signingConfigs.release
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+}
+
+tasks.register("syncSharedJava", Sync) {
+    from new File(gameApp, "java")
+    exclude "**/LauncherActivity.java"
+    into sharedJava
+}
+tasks.named("preBuild") { dependsOn "syncSharedJava" }
