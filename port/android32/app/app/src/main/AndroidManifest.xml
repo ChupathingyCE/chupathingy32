@@ -39,6 +39,10 @@
         <meta-data
             android:name="android.app.category"
             android:value="game" />
+        <!-- the touch overlay's compact layout, for the small wide screens of smart displays (TouchControls) -->
+        <meta-data
+            android:name="halo.compact_touch_layout"
+            android:value="true" />
 
         <activity
             android:name=".LauncherActivity"
