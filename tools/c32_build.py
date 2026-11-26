@@ -30,6 +30,12 @@ the packaging are the game's, and none of it is copied here. What this adds:
   C++ library, and the 32-bit builds leave it out alike. The game hides the
   setting in such a build. A game commit from before the option builds
   with them, as it did.
+- The Xbox memory window wherever it fits, on Windows (the game's
+  configure.py --window-rebase, through its tools/ci_build.py): the game
+  keeps it at 0x80000000, which 32-bit Windows keeps for itself, so the
+  game's own 32-bit build starts only on 64-bit Windows (#17). A build
+  that looks for updates is refused on a game commit without the option;
+  a -dev build is still built.
 - The game's dist/chupathingyce-<platform>-<config> folder, moved to this
   repository's dist/, and its symbols (Windows: the PDBs and the map) to
   symbols/, apart from what players download.
@@ -58,6 +64,9 @@ UPDATE_REPOSITORY_SUPPORT = "HALO_UPDATE_REPOSITORY"
 # what the game's tools/ci_build.py has once it can leave the ragdolls and
 # Jolt Physics out (ChupathingyCE/chupathingyce#1680)
 WITHOUT_RAGDOLLS = "--without-ragdolls"
+# what the game's tools/ci_build.py has once its 32-bit Windows build can
+# put the Xbox memory window wherever it fits (#17)
+WINDOW_REBASE = "--window-rebase"
 # a test build's or a nightly's version (the game's PRERELEASE_VERSION, in
 # short: the game's tools/version.py checks it in full)
 PRERELEASE = re.compile(r"-(testing|nightly)\.\d{12}$")
@@ -101,8 +110,17 @@ def main() -> int:
         return 1
     print(f"updates from {env['HALO_UPDATE_REPOSITORY']}'s releases", flush=True)
     command = [sys.executable, "tools/ci_build.py", platform, args.config]
-    if WITHOUT_RAGDOLLS in (GAME / "tools/ci_build.py").read_text(encoding="utf-8"):
+    ci_build_py = (GAME / "tools/ci_build.py").read_text(encoding="utf-8")
+    if WITHOUT_RAGDOLLS in ci_build_py:
         command.append(WITHOUT_RAGDOLLS)
+    if platform == "windows":
+        if WINDOW_REBASE in ci_build_py:
+            command.append(WINDOW_REBASE)
+        elif looks_for_updates(env):
+            print(f"error: {env.get('HALO_VERSION') or 'this build'} is for players, but the game's commit has no "
+                  f"{WINDOW_REBASE} (chupathingyce/tools/ci_build.py), so its Windows build would not start on "
+                  "32-bit Windows: move the submodule to a game commit with it (#17)", file=sys.stderr)
+            return 1
     print("+", " ".join(command), f"(in {GAME.name})", flush=True)
     if platform == "windows":
         game_icon = GAME_WINDOWS_ICON.read_bytes()
