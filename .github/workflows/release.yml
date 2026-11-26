@@ -81,6 +81,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       GAME_REPO: ChupathingyCE/chupathingyce
+      # (the game's merge of its updater fix: every build here has it)
+      GAME_FIX: f4359df38357218889178132b27a07f83f9a13bf
       EVENT: ${{ github.event_name }}
       KIND: ${{ inputs.kind }}
       FORCE: ${{ inputs.force }}
@@ -140,6 +142,24 @@ jobs:
             *)
               echo "::error::unknown kind $kind"; exit 1 ;;
           esac
+          # (never a game without the updater fix that stops it deleting a
+          # halo.exe that isn't ours, ChupathingyCE/chupathingyce#1855; and a
+          # release's game is on the game's own release of that version)
+          contains() {
+            state="$(gh api "repos/$GAME_REPO/compare/$1...$2" --jq .status)" || return 1
+            [ "$state" = ahead ] || [ "$state" = identical ]
+          }
+          if ! contains "$GAME_FIX" "$game"; then
+            echo "::error::the game's commit $game does not have the game's updater fix ($GAME_FIX, ChupathingyCE/chupathingyce#1855): move the submodule to the game's latest release"
+            exit 1
+          fi
+          if [ "$kind" = release ]; then
+            released="$(gh api "repos/$GAME_REPO/commits/v$base" --jq .sha 2>/dev/null)" || released=
+            if [ -z "$released" ] || ! contains "$game" "$released"; then
+              echo "::error::the game's commit $game is not in the game's release v$base${released:+ ($released)}: move the submodule to that release's commit"
+              exit 1
+            fi
+          fi
           out build true
           out kind "$kind"
           out version "$version"
