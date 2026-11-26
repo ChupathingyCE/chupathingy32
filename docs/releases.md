@@ -22,7 +22,8 @@ The number after `testing.` or `nightly.` is the time the build was made
 - **A release** is a pushed tag `v<VERSION>`, where VERSION is the game's
   `VERSION` file at the submodule's commit. The workflow refuses any other
   tag. On release day the submodule is moved to the commit the game
-  released, then the tag is pushed.
+  released, then the tag is pushed. The workflow also refuses a tag whose
+  game commit isn't in the game's own `v<VERSION>` release.
 - **A test build** is started by hand (Actions, Release, Run workflow,
   kind `testing`). It builds this repository's main as it is.
 - **A nightly** builds main with the game moved to the game's main, in the
@@ -31,6 +32,11 @@ The number after `testing.` or `nightly.` is the time the build was made
 
 Test builds and nightlies are never marked latest, so players on the
 release channel never see them.
+
+No kind is built from a game commit without the game's updater fix
+(ChupathingyCE/chupathingyce#1855, which stops the updater deleting a
+`halo.exe` that isn't ours). The workflow stops at its plan with an error
+naming the commit.
 
 ## Files
 
