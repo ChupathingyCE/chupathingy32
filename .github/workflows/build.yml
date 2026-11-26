@@ -334,7 +334,9 @@ jobs:
           python - <<'PY'
           import sys
           icon = open("art/icon/chupathingy32-16.png", "rb").read()
-          for name in ("chupathingy.exe", "halo.exe"):
+          # (the only executable: the game has built no halo.exe stub since
+          # 0.9.2, ChupathingyCE/chupathingyce#1855)
+          for name in ("chupathingy.exe",):
               data = open(f"dist/chupathingyce-windows-release/{name}", "rb").read()
               print(f"{name}: Chupathingy32's icon {'found' if icon in data else 'missing'}")
               if icon not in data:
