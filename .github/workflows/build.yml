@@ -327,6 +327,46 @@ jobs:
           sys.exit(0 if machine == 0x014C else "the Windows game is not a 32-bit x86 program")
           PY
 
+      # (a copy without the large-address-aware flag has the 2 GB that
+      # 32-bit Windows gives a program, as the runner's 64-bit Windows does
+      # for one: the game must put its memory below 0x80000000 and get past
+      # it, #17. No maps here, so it stops at the setup screen and is ended)
+      - name: Starts in 2 GB
+        run: |
+          python - <<'PY'
+          import os, re, shutil, struct, subprocess, sys, tempfile
+          work = tempfile.mkdtemp()
+          shutil.copytree("dist/chupathingyce-windows-release", os.path.join(work, "game"))
+          exe = os.path.join(work, "game", "chupathingy.exe")
+          data = bytearray(open(exe, "rb").read())
+          offset = struct.unpack_from("<I", data, 0x3C)[0] + 22
+          struct.pack_into("<H", data, offset, struct.unpack_from("<H", data, offset)[0] & ~0x20)
+          open(exe, "wb").write(data)
+          for sub in ("home", "data", "saves"):
+              os.makedirs(os.path.join(work, sub))
+          env = dict(os.environ, USERPROFILE=os.path.join(work, "home"), HALO_DATA_ROOT=os.path.join(work, "data"),
+                     HALO_SAVE_ROOT=os.path.join(work, "saves"), HALO_UPDATE_AUTO="false", HALO_CRASH_REPORTS="no",
+                     HALO_NET_ONLINE="false", HALO_NET_LIST_GAMES="false", HALO_NET_REPORT_GAMES="false",
+                     HALO_NET_BROWSER="", HALO_NET_MAPS_URL="", HALO_NET_ALLOW_UPNP="false",
+                     HALO_DISCORD_APPLICATION="", SDL_VIDEO_DRIVER="dummy", SDL_AUDIO_DRIVER="dummy")
+          try:
+              output = subprocess.run([exe], cwd=os.path.join(work, "data"), env=env, stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT, timeout=30).stdout
+          except subprocess.TimeoutExpired as stopped:
+              output = stopped.stdout or b""
+              subprocess.run(["taskkill", "/F", "/T", "/IM", "chupathingy.exe"], capture_output=True)
+          text = output.decode("utf-8", "replace")
+          print(text[:3000])
+          window = re.findall(r"contiguous window at ([0-9a-f]{8})", text)
+          if "can't start" in text or "needs 64-bit" in text or not window:
+              sys.exit("the game found no room for its memory in 2 GB")
+          if int(window[-1], 16) >= 0x80000000:
+              sys.exit(f"the window is at {window[-1]}, above 2 GB")
+          if "settings:" not in text:
+              sys.exit("the game stopped before reading its settings")
+          print(f"started in 2 GB, the window at {window[-1]}")
+          PY
+
       # (the icon's images go into the executable as they are in the .ico:
       # its 16-pixel one is art/icon/chupathingy32-16.png, byte for byte)
       - name: Icon
